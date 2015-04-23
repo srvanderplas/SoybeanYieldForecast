@@ -11,7 +11,7 @@ output:
 ### in response to email from Sotirios on April 22, 2015
 ```{r setup, echo=F}
 library(knitr)
-opts_chunk$set(cache=T, autodep=T, root="../", warning=F, message=F)
+opts_chunk$set(cache=T, autodep=T, root="../", warning=F, message=F, fig.retina=NA)
 ```
 
 ```{r libraries, echo=F}
@@ -296,7 +296,89 @@ ggplot() +
   ylab("Cumulative Rainfall (in)") +
   xlab("Date")
 ```
-```{r table-output, echo=F}
+```{r table-output-1, echo=F}
 library(knitr)
 kable(monthRainDevTable)
+```
+
+## Figure 2
+```{r graph2, include=T, fig.width=8, fig.height=6, out.width="90%", dependson='graph1'}
+# Figure 2: radiation from April 1st to October 31st (see attached picture)
+# - Use the historical data to calculate median, 5 and 95% probabilities and shade
+# - Projected are always the last 14 rows from “rad-ames-h”, “rad-suth-h”
+# - Actual are the data in the e.g. “rad-ames” minus the last 14 rows
+# - Calculate sums per month and % deviation from long term average. Tell R to output this in a table so we can copy and paste the information to the final destination.
+# - Make a nice legend  and axes titles with units
+# - Note the x-axis in the graph should always start from April 1st and end Oct 31st.
+# - Start the accumulation of rain from April 1st and skip the extra data that I have in the csv.
+
+# Cumulative Radiation
+Radiation <- climate %>%
+  arrange(Date) %>%
+  filter(AprOct) %>%
+  group_by(Location, Year, CurrentYear)
+
+# Month Averages
+monthRad <- Radiation %>%
+  mutate(month = month(Date, label=T)) %>%
+  group_by(Location, Year, month) %>%
+  summarise(Rad=mean(Radiation), CurrentYear=unique(CurrentYear)) %>%
+  group_by(Location, month) %>%
+  mutate(AvgRad = mean(Rad[!CurrentYear]))
+
+monthRadDev <- monthRad %>%
+  filter(Year==2015) %>%
+  mutate(PctDevRad = (mean(Rad[Year==2015])-AvgRad)/AvgRad*100)
+
+monthRadDevTable <- dcast(monthRadDev, Location ~ month, value.var="PctDevRad")
+
+# Calculate quantiles
+rad.bands <- filter(Radiation, !CurrentYear) %>%
+  group_by(Location, plotDate) %>%
+  summarise(lb=quantile(Radiation, .05),
+            ub=quantile(Radiation, .95))
+rad.bands$Type <- "Historical\nAverage"
+
+# 2015 data
+AvgRadiation <- filter(Radiation, !Projected) %>%
+  group_by(Location, plotDate, CurrentYear) %>%
+  summarise(Rad=median(Radiation)) %>%
+  mutate(Type=c("Historical\nAverage", "2015")[CurrentYear+1]) 
+
+# This option has a loess smooth for the median and current year's data, with the current year's observations shown as points
+ggplot() +
+  geom_ribbon(data=rad.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="orange3") +
+  stat_smooth(data=AvgRadiation, aes(x=plotDate, y=Rad, color=Type), se=F, method="loess", geom="line", span=.5) +
+  geom_point(data=subset(AvgRadiation, CurrentYear), aes(x=plotDate, y=Rad, color=Type), shape=1) +
+  scale_color_manual("", values=c("2015" = "black", "Historical\nAverage"="orange4")) +
+  facet_wrap(~Location, nrow=2) +
+  ggtitle("Radiation") +
+  ylab("Radiation (Mj/m^2)") +
+  xlab("Date")
+
+# A compromise between the two: use only 1/8th of the data to smooth at any given point
+ggplot() +
+  geom_ribbon(data=rad.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="orange3") +
+  stat_smooth(data=AvgRadiation, aes(x=plotDate, y=Rad, color=Type), se=F, method="loess", geom="line", span=1/8) +
+  geom_point(data=subset(AvgRadiation, CurrentYear), aes(x=plotDate, y=Rad, color=Type), shape=1) +
+  scale_color_manual("", values=c("2015" = "black", "Historical\nAverage"="orange4")) +
+  facet_wrap(~Location, nrow=2) +
+  ggtitle("Radiation") +
+  ylab("Radiation (Mj/m^2)") +
+  xlab("Date")
+
+
+# This option shows only the data, connected with a very jagged line.
+ggplot() +
+  geom_ribbon(data=rad.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="orange3") +
+  geom_line(data=AvgRadiation, aes(x=plotDate, y=Rad, color=Type)) +
+  scale_color_manual("", values=c("2015" = "black", "Historical\nAverage"="orange4")) +
+  facet_wrap(~Location, nrow=2) +
+  ggtitle("Radiation") +
+  ylab("Radiation (Mj/m^2)") +
+  xlab("Date")
+```
+```{r table-output-2, echo=F}
+library(knitr)
+kable(monthRadDevTable)
 ```
