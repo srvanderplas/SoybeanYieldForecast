@@ -215,3 +215,71 @@ if(sum(!leap_year(unique(climate$Year[climate$Day==366])))>0)
   stop("Error: Non leap year with 366 days. Check Year calculation and/or spreadsheet format!")
 
 ## ------------------------------------------------------------------------------
+
+
+### Graphs
+
+# Figure 1 ----------------------------------------------------------------------
+# Figure 1: cumulative rain from April 1st to October 31st (see attached picture)
+# - Use the historical data to calculate median, 5 and 95% probabilities and shade
+# - Projected are always the last 14 rows from “max-ames”, “max-suth”, “min-ames”, ….
+# - Actual are the data in the e.g. “max-ames” minus the last 14 rows
+# - Calculate sums per month and % deviation from long term average. Tell R to output this in a table so we can copy and paste the information to the final destination.
+# - Make a nice legend  and axes titles with units
+# - Note the x-axis in the graph should always start from April 1st and end Oct 31st.
+# - Start the accumulation of rain from April 1st and skip the extra data that I have in the csv.
+
+# Is date in correct range?
+climate$Date <- as.Date(sprintf("%s-01-01", climate$Year))
+yday(climate$Date) <- climate$Day
+climate$AprOct <- abs(month(climate$Date)-7)<4
+climate$plotDate <- climate$Date
+year(climate$plotDate) <- 2015
+
+# Cumulative Rainfall
+Rainfall <- climate %>%
+  arrange(Date) %>%
+  filter(AprOct) %>%
+  group_by(Location, Year, CurrentYear) %>%
+  mutate(CumRain = cumsum(Rain))
+
+# Month Averages
+monthRain <- Rainfall %>%
+  mutate(month = month(Date, label=T)) %>%
+  group_by(Location, Year, month) %>%
+  summarise(CumRain=CumRain[which.max(Date)], CurrentYear=unique(CurrentYear)) %>%
+  group_by(Location, month) %>%
+  mutate(AvgCumRain = mean(CumRain[!CurrentYear]))
+
+monthRainDev <- monthRain %>%
+  filter(Year==2015) %>%
+  mutate(PctDevCumRain = (mean(CumRain[Year==2015])-AvgCumRain)/AvgCumRain*100)
+
+monthRainDevTable <- dcast(monthRainDev, Location ~ month, value.var="PctDevCumRain")
+
+# Calculate quantiles
+rain.bands <- filter(Rainfall, !CurrentYear) %>%
+  group_by(Location, plotDate) %>%
+  summarise(lb=quantile(CumRain, .05),
+            ub=quantile(CumRain, .95))
+rain.bands$Type <- "Historical\nAverage"
+
+# 2015 data
+AvgRainfall <- filter(Rainfall, !Projected) %>%
+  group_by(Location, plotDate, CurrentYear) %>%
+  summarise(CumRain=median(CumRain)) %>%
+  mutate(Type=c("Historical\nAverage", "2015")[CurrentYear+1])
+
+ggplot() +
+  geom_ribbon(data=rain.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="royalblue1") +
+  geom_line(data=AvgRainfall, aes(x=plotDate, y=CumRain, color=Type)) +
+  scale_color_manual("", values=c("2015" = "black", "Historical\nAverage"="royalblue4")) +
+  facet_wrap(~Location, nrow=2) +
+  ggtitle("Rainfall") +
+  ylab("Cumulative Rainfall (in)") +
+  xlab("Date")
+
+library(knitr)
+kable(monthRainDevTable)
+#--------------------------------------------------------------------------------
+
