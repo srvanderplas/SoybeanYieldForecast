@@ -14,7 +14,7 @@ library(knitr)
 opts_chunk$set(cache=T, autodep=T, root="../", warning=F, message=F, fig.retina=NA)
 ```
 
-```{r libraries, echo=F}
+```{r libraries, echo=F, cache=F}
 # R libraries -------------------------------------------------------------------
 library(ggplot2) # plotting
 library(lubridate) # handling date/time data
@@ -25,28 +25,7 @@ library(readr) # reading data into R
 library(Hmisc) # capitalize function
 # -------------------------------------------------------------------------------
 ```
-```{r workspace, echo=F}
-# Workspace setup ---------------------------------------------------------------
-# Data should be in ./Data
-# Code should be in ./Code
-# Ensure we're in the proper working directory:
-wd <- str_split(getwd(), "/")[[1]][-1] # list of all folders in the path
 
-# if SoybeanYieldForecast is not in the path, stop with an error
-if(!"SoybeanYieldForecast"%in%wd){
-  stop(paste0("SoybeanYieldForecast (the project root directory) must be in the path: \n", getwd()))
-}
-
-# otherwise, check to make sure it's the last directory in the path
-# (so that all file paths will be accurate from this point on)
-if(which(wd=="SoybeanYieldForecast")!=length(wd)){
-  # If the project root is not the last folder in the path,
-  # then transverse the path until the project root is in the path
-  setwd(paste(rep("../", length(wd)-which(wd=="SoybeanYieldForecast")), collapse=""))
-}
-rm(wd)
-# -------------------------------------------------------------------------------
-```
 ```{r unitconv, echo=T}
 # Unit conversion --------------------------------------------------------------
 # Convert rain from mm to inches. [inches =  0.0393701 * mm]
@@ -95,7 +74,7 @@ cToF <- function(x) { 32 + x*9/5 }
 # -------------------------------------------------------------------------------
 ```
 
-```{r data-setup, echo=T, dependson='workspace'}
+```{r data-setup, echo=T}
 ## Data Setup
 # Read in climate data ----------------------------------------------------------
 climateData <- read_csv("../Data/Climate.csv")
@@ -128,8 +107,12 @@ apply_subs <- function(x, pattern, replacement){
 }
 
 # Function to fix climate variables ---------------------------------------------
-fixClimateVar <- function(climateData, var="temp", projected=NULL, 
-                          locSubs = data_frame(from="suth", to="sutherland")){
+fixClimateVar <- function(climateData, var="temp", projected=NULL, locSubs = data_frame(from="suth", to="sutherland")){
+  # Debugging: variable definitions
+  # var="max"
+  # projected=NULL
+  # locSubs=data_frame(from="suth", to="sutherland")
+
   # Check var is one of "temp", "rad", "rain", "max", "min"
   if(!var%in%c("temp", "rad", "rain", "max", "min")){
     stop("Argument var must be one of \"temp\", \"rad\", \"rain\", \"max\", \"min\"")
@@ -160,7 +143,7 @@ fixClimateVar <- function(climateData, var="temp", projected=NULL,
   # Strip -h from variable name
   histData$Location <- str_replace_all(histData$Location, "-h", "")
   # Remove NA values
-  histData <- filter(histData, !is.na(histData[,valueName]))
+  histData <- histData[!is.na(histData[,valueName]),]
 
 
   # get current information
@@ -173,7 +156,7 @@ fixClimateVar <- function(climateData, var="temp", projected=NULL,
   # Indicate data is for the current year
   curData$CurrentYear <- TRUE
   # Remove NA values
-  curData <- filter(curData, !is.na(curData[,valueName]))
+  curData <- curData[!is.na(curData[,valueName]),]
 
   # If projected days aren't defined, define them based on last 14 days of current data
   if(is.null(projected)){
@@ -232,11 +215,15 @@ if(sum(!leap_year(unique(climate$Year[climate$Day==366])))>0)
   stop("Error: Non leap year with 366 days. Check Year calculation and/or spreadsheet format!")
 
 ## ------------------------------------------------------------------------------
+
+
+# Set default ggplot2 theme
+theme_set(theme_bw())
 ```
 
 # Graphs
 ## Figure 1
-```{r graph1, include=T, fig.width=8, fig.height=6, out.width="90%"}
+```{r graph1, include=T, fig.width=8, fig.height=6, out.width="90%", dependson='data-setup'}
 # Figure 1: cumulative rain from April 1st to October 31st (see attached picture)
 # - Use the historical data to calculate median, 5 and 95% probabilities and shade
 # - Projected are always the last 14 rows from “max-ames”, “max-suth”, “min-ames”, ….
@@ -254,7 +241,7 @@ climate$plotDate <- climate$Date
 year(climate$plotDate) <- 2015
 
 # Cumulative Rainfall
-Rainfall <- climate %>%
+Rainfall <- climate %>% 
   arrange(Date) %>%
   filter(AprOct) %>%
   group_by(Location, Year, CurrentYear) %>%
@@ -270,7 +257,7 @@ monthRain <- Rainfall %>%
 
 monthRainDev <- monthRain %>%
   filter(Year==2015) %>%
-  mutate(PctDevCumRain = paste0(sprintf("%.2f", (mean(CumRain[Year==2015])-AvgCumRain)/AvgCumRain*100), "%"))
+  mutate(PctDevCumRain = (mean(CumRain[Year==2015])-AvgCumRain)/AvgCumRain*100)
 
 monthRainDevTable <- dcast(monthRainDev, Location ~ month, value.var="PctDevCumRain")
 
@@ -287,11 +274,27 @@ AvgRainfall <- filter(Rainfall, !Projected) %>%
   summarise(CumRain=median(CumRain)) %>%
   mutate(Type=c("Historical\nAverage", "2015")[CurrentYear+1])
 
+# Projected
+ProjRainfall <- filter(Rainfall, Projected)
+LastRecordedRain <- with(Rainfall, Rainfall[(plotDate%in%min(ProjRainfall$plotDate-days(1)) & CurrentYear),])
+ProjRainfall <- rbind(LastRecordedRain, ProjRainfall) %>%
+  group_by(Location, plotDate, CurrentYear) %>%
+  summarise(CumRain=median(CumRain)) %>%
+  mutate(Type="Projected")
+
+AvgRainfall <- rbind(AvgRainfall, ProjRainfall)
+
+AvgRainfall$Type <- factor(AvgRainfall$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+rain.bands$Type <- factor(rain.bands$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+AvgRainfall$linetype <- c("1", "1", "11")[AvgRainfall$Type]
+
 ggplot() +
-  geom_ribbon(data=rain.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="royalblue1") +
-  geom_line(data=AvgRainfall, aes(x=plotDate, y=CumRain, color=Type)) +
-  scale_color_manual("", values=c("2015" = "black", "Historical\nAverage"="royalblue4")) +
+  geom_ribbon(data=rain.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="lightskyblue3") +
+  geom_line(data=AvgRainfall, aes(x=plotDate, y=CumRain, color=Type, linetype=Type, size=Type, group=Type)) +
   facet_wrap(~Location, nrow=2) +
+  scale_color_manual("", values=c("lightskyblue4", "black", "black")) +
+  scale_linetype_manual("", values=c("solid", "solid", "11")) +
+  scale_size_manual("", values=c(1, 2, 2)) +
   ggtitle("Rainfall") +
   ylab("Cumulative Rainfall (in)") +
   xlab("Date")
@@ -302,7 +305,7 @@ kable(monthRainDevTable)
 ```
 
 ## Figure 2
-```{r graph2, include=T, fig.width=8, fig.height=6, out.width="90%", dependson='graph1'}
+```{r graph2, include=T, fig.width=8, fig.height=6, out.width="90%", dependson=c('graph1', 'data-setup')}
 # Figure 2: radiation from April 1st to October 31st (see attached picture)
 # - Use the historical data to calculate median, 5 and 95% probabilities and shade
 # - Projected are always the last 14 rows from “rad-ames-h”, “rad-suth-h”
@@ -312,73 +315,180 @@ kable(monthRainDevTable)
 # - Note the x-axis in the graph should always start from April 1st and end Oct 31st.
 # - Start the accumulation of rain from April 1st and skip the extra data that I have in the csv.
 
+# set default ggplot2 theme
+theme_set(theme_bw())
+
 # Cumulative Radiation
 Radiation <- climate %>%
   arrange(Date) %>%
   filter(AprOct) %>%
-  group_by(Location, Year, CurrentYear)
+  group_by(Location, Year, CurrentYear) %>%
+  mutate(CumRad = cumsum(Radiation))
 
 # Month Averages
 monthRad <- Radiation %>%
   mutate(month = month(Date, label=T)) %>%
   group_by(Location, Year, month) %>%
-  summarise(Rad=mean(Radiation), CurrentYear=unique(CurrentYear)) %>%
+  summarise(CumRad=CumRad[which.max(Date)], CurrentYear=unique(CurrentYear)) %>%
   group_by(Location, month) %>%
-  mutate(AvgRad = mean(Rad[!CurrentYear]))
+  mutate(AvgCumRad = mean(CumRad[!CurrentYear]))
 
 monthRadDev <- monthRad %>%
   filter(Year==2015) %>%
-  mutate(PctDevRad = (mean(Rad[Year==2015])-AvgRad)/AvgRad*100)
+  mutate(PctDevCumRad = (mean(CumRad[Year==2015])-AvgCumRad)/AvgCumRad*100)
 
-monthRadDevTable <- dcast(monthRadDev, Location ~ month, value.var="PctDevRad")
+monthRadDevTable <- dcast(monthRadDev, Location ~ month, value.var="PctDevCumRad")
 
 # Calculate quantiles
-rad.bands <- filter(Radiation, !CurrentYear) %>%
+Rad.bands <- filter(Radiation, !CurrentYear) %>%
   group_by(Location, plotDate) %>%
-  summarise(lb=quantile(Radiation, .05),
-            ub=quantile(Radiation, .95))
-rad.bands$Type <- "Historical\nAverage"
+  summarise(lb=quantile(CumRad, .05),
+            ub=quantile(CumRad, .95))
+Rad.bands$Type <- "Historical\nAverage"
+
 
 # 2015 data
 AvgRadiation <- filter(Radiation, !Projected) %>%
   group_by(Location, plotDate, CurrentYear) %>%
-  summarise(Rad=median(Radiation)) %>%
-  mutate(Type=c("Historical\nAverage", "2015")[CurrentYear+1]) 
+  summarise(CumRad=median(CumRad)) %>%
+  mutate(Type=c("Historical\nAverage", "2015")[CurrentYear+1])
 
-# This option has a loess smooth for the median and current year's data, with the current year's observations shown as points
+# Projected
+ProjRadiation <- filter(Radiation, Projected)
+LastRecordedRad <- subset(Radiation, plotDate==(min(ProjRadiation$plotDate-days(1))) & CurrentYear)
+ProjRadiation <- rbind(LastRecordedRad, ProjRadiation) %>%
+  group_by(Location, plotDate, CurrentYear) %>%
+  summarise(CumRad=median(CumRad)) %>%
+  mutate(Type="Projected")
+
+AvgRadiation <- rbind(AvgRadiation, ProjRadiation)
+
+AvgRadiation$Type <- factor(AvgRadiation$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+Rad.bands$Type <- factor(Rad.bands$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+AvgRadiation$linetype <- c("1", "1", "11")[AvgRadiation$Type]
+
 ggplot() +
-  geom_ribbon(data=rad.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="orange3") +
-  stat_smooth(data=AvgRadiation, aes(x=plotDate, y=Rad, color=Type), se=F, method="loess", geom="line", span=.5) +
-  geom_point(data=subset(AvgRadiation, CurrentYear), aes(x=plotDate, y=Rad, color=Type), shape=1) +
-  scale_color_manual("", values=c("2015" = "black", "Historical\nAverage"="orange4")) +
+  geom_ribbon(data=Rad.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="orange3") +
+  geom_line(data=AvgRadiation, aes(x=plotDate, y=CumRad, color=Type, linetype=Type, size=Type, group=Type)) +
   facet_wrap(~Location, nrow=2) +
+  scale_color_manual("", values=c("orange4", "black", "black")) +
+  scale_linetype_manual("", values=c("solid", "solid", "11")) +
+  scale_size_manual("", values=c(1, 2, 2)) +
   ggtitle("Radiation") +
-  ylab("Radiation (Mj/m^2)") +
+  ylab("Cumulative Radiation (MJ/m^2)") +
   xlab("Date")
 
-# A compromise between the two: use only 1/8th of the data to smooth at any given point
-ggplot() +
-  geom_ribbon(data=rad.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="orange3") +
-  stat_smooth(data=AvgRadiation, aes(x=plotDate, y=Rad, color=Type), se=F, method="loess", geom="line", span=1/8) +
-  geom_point(data=subset(AvgRadiation, CurrentYear), aes(x=plotDate, y=Rad, color=Type), shape=1) +
-  scale_color_manual("", values=c("2015" = "black", "Historical\nAverage"="orange4")) +
-  facet_wrap(~Location, nrow=2) +
-  ggtitle("Radiation") +
-  ylab("Radiation (Mj/m^2)") +
-  xlab("Date")
-
-
-# This option shows only the data, connected with a very jagged line.
-ggplot() +
-  geom_ribbon(data=rad.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="orange3") +
-  geom_line(data=AvgRadiation, aes(x=plotDate, y=Rad, color=Type)) +
-  scale_color_manual("", values=c("2015" = "black", "Historical\nAverage"="orange4")) +
-  facet_wrap(~Location, nrow=2) +
-  ggtitle("Radiation") +
-  ylab("Radiation (Mj/m^2)") +
-  xlab("Date")
 ```
 ```{r table-output-2, echo=F}
 library(knitr)
 kable(monthRadDevTable)
+```
+
+
+## Figure 3 and 4 (Min and Max Temp)
+```{r graph3, include=T, fig.width=8, fig.height=6, out.width="90%", dependson=c('graph1', 'graph2', 'data-setup')}
+# Figure 3 ----------------------------------------------------------------------
+# Figure 3: Temperature from April 1st to October 31st
+# - Use the historical data to calculate median, 5 and 95% probabilities and shade
+# - Projected are always the last 14 rows from “min-ames-h”, “min-suth-h”
+# - Actual are the data in the e.g. “min-ames” minus the last 14 rows
+# - Calculate sums per month and % deviation from long term average. Tell R to output this in a table so we can copy and paste the information to the final destination.
+# - Make a nice legend  and axes titles with units
+# - Note the x-axis in the graph should always start from April 1st and end Oct 31st.
+# - Start the accumulation of rain from April 1st and skip the extra data that I have in the csv.
+
+theme_set(theme_bw())
+
+# Temperature
+Temp <- climate %>%
+  arrange(Date) %>%
+  filter(AprOct) %>%
+  group_by(Location, Year, CurrentYear)
+
+# Month Averages
+monthTemp <- Temp %>%
+  mutate(month = month(Date, label=T)) %>%
+  group_by(Location, Year, month) %>%
+  summarise(MinTemp=mean(MinTemp), MaxTemp=mean(MaxTemp), CurrentYear=unique(CurrentYear)) %>%
+  group_by(Location, month) %>%
+  mutate(AvgMinTemp = mean(MinTemp[!CurrentYear]), AvgMaxTemp = mean(MaxTemp[!CurrentYear]))
+
+monthTempDev <- monthTemp %>%
+  filter(Year==2015) %>%
+  mutate(PctDevMinTemp = (mean(MinTemp[Year==2015])-AvgMinTemp)/AvgMinTemp*100,
+         PctDevMaxTemp = (mean(MaxTemp[Year==2015])-AvgMaxTemp)/AvgMaxTemp*100)
+
+monthMinTempDevTable <- dcast(monthTempDev, Location ~ month, value.var="PctDevMinTemp")
+monthMaxTempDevTable <- dcast(monthTempDev, Location ~ month, value.var="PctDevMaxTemp")
+
+# Calculate quantiles
+min.temp.bands <- filter(Temp, !CurrentYear) %>%
+  group_by(Location, plotDate) %>%
+  summarise(lb=quantile(MinTemp, .05),
+            ub=quantile(MinTemp, .95))
+min.temp.bands$Type <- "Historical\nAverage"
+
+max.temp.bands <- filter(Temp, !CurrentYear) %>%
+  group_by(Location, plotDate) %>%
+  summarise(lb=quantile(MaxTemp, .05),
+            ub=quantile(MaxTemp, .95))
+max.temp.bands$Type <- "Historical\nAverage"
+
+
+# 2015 data
+AvgTemp <- filter(Temp, !Projected) %>%
+  group_by(Location, plotDate, CurrentYear) %>%
+  summarise(MinTemp=median(MinTemp), MaxTemp=median(MaxTemp)) %>%
+  mutate(Type=c("Historical\nAverage", "2015")[CurrentYear+1])
+
+# Projected
+ProjTemp <- filter(Temp, Projected) %>%
+  group_by(Location, plotDate, CurrentYear) %>%
+  summarise(MinTemp=median(MinTemp), MaxTemp=median(MaxTemp)) %>%
+  mutate(Type="Projected")
+
+AvgTemp <- rbind(AvgTemp, ProjTemp)
+
+AvgTemp$Type <- factor(AvgTemp$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+min.temp.bands$Type <- factor(min.temp.bands$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+max.temp.bands$Type <- factor(max.temp.bands$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+AvgTemp$linetype <- c("1", "1", "11")[AvgTemp$Type]
+
+ggplot() +
+  geom_ribbon(data=min.temp.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="mediumorchid3") +
+  geom_line(data=AvgTemp, aes(x=plotDate, y=MinTemp, color=Type, linetype=Type, size=Type, group=Type)) +
+  facet_wrap(~Location, nrow=2) +
+  scale_color_manual("", values=c("mediumorchid4", "black", "black")) +
+  scale_linetype_manual("", values=c("solid", "solid", "11")) +
+  scale_size_manual("", values=c(1, 2, 2)) +
+  ggtitle("Minimum Temperature") +
+  ylab("Degrees (F)") +
+  xlab("Date")
+
+#--------------------------------------------------------------------------------
+
+```
+```{r table-output-3, echo=F}
+library(knitr)
+kable(monthMinTempDevTable)
+```
+
+```{r graph-4, include=T, fig.width=8, fig.height=6, out.width="90%", dependson=c('graph3', 'graph1', 'graph2', 'data-setup')}
+
+theme_set(theme_bw())
+
+ggplot() +
+  geom_ribbon(data=max.temp.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="firebrick1") +
+  geom_line(data=AvgTemp, aes(x=plotDate, y=MaxTemp, color=Type, linetype=Type, size=Type, group=Type)) +
+  facet_wrap(~Location, nrow=2) +
+  scale_color_manual("", values=c("firebrick4", "black", "black")) +
+  scale_linetype_manual("", values=c("solid", "solid", "11")) +
+  scale_size_manual("", values=c(1, 2, 2)) +
+  ggtitle("Maximum Temperature") +
+  ylab("Degrees (F)") +
+  xlab("Date")
+```
+```{r table-output-4, echo=F}
+library(knitr)
+kable(monthMaxTempDevTable)
 ```

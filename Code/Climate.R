@@ -221,6 +221,8 @@ if(sum(!leap_year(unique(climate$Year[climate$Day==366])))>0)
 
 ## ------------------------------------------------------------------------------
 
+# Set default ggplot2 theme
+theme_set(theme_bw())
 
 ### Graphs
 
@@ -275,11 +277,27 @@ AvgRainfall <- filter(Rainfall, !Projected) %>%
   summarise(CumRain=median(CumRain)) %>%
   mutate(Type=c("Historical\nAverage", "2015")[CurrentYear+1])
 
+# Projected
+ProjRainfall <- filter(Rainfall, Projected)
+LastRecordedRain <- with(Rainfall, Rainfall[(plotDate%in%min(ProjRainfall$plotDate-days(1)) & CurrentYear),])
+ProjRainfall <- rbind(LastRecordedRain, ProjRainfall) %>%
+  group_by(Location, plotDate, CurrentYear) %>%
+  summarise(CumRain=median(CumRain)) %>%
+  mutate(Type="Projected")
+
+AvgRainfall <- rbind(AvgRainfall, ProjRainfall)
+
+AvgRainfall$Type <- factor(AvgRainfall$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+rain.bands$Type <- factor(rain.bands$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+AvgRainfall$linetype <- c("1", "1", "11")[AvgRainfall$Type]
+
 ggplot() +
-  geom_ribbon(data=rain.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="royalblue1") +
-  geom_line(data=AvgRainfall, aes(x=plotDate, y=CumRain, color=Type)) +
-  scale_color_manual("", values=c("2015" = "black", "Historical\nAverage"="royalblue4")) +
+  geom_ribbon(data=rain.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="lightskyblue3") +
+  geom_line(data=AvgRainfall, aes(x=plotDate, y=CumRain, color=Type, linetype=Type, size=Type, group=Type)) +
   facet_wrap(~Location, nrow=2) +
+  scale_color_manual("", values=c("lightskyblue4", "black", "black")) +
+  scale_linetype_manual("", values=c("solid", "solid", "11")) +
+  scale_size_manual("", values=c(1, 2, 2)) +
   ggtitle("Rainfall") +
   ylab("Cumulative Rainfall (in)") +
   xlab("Date")
@@ -299,6 +317,66 @@ ggplot() +
 # - Start the accumulation of rain from April 1st and skip the extra data that I have in the csv.
 
 # Cumulative Radiation
+Radiation <- climate %>%
+  arrange(Date) %>%
+  filter(AprOct) %>%
+  group_by(Location, Year, CurrentYear) %>%
+  mutate(CumRad = cumsum(Radiation))
+
+# Month Averages
+monthRad <- Radiation %>%
+  mutate(month = month(Date, label=T)) %>%
+  group_by(Location, Year, month) %>%
+  summarise(CumRad=CumRad[which.max(Date)], CurrentYear=unique(CurrentYear)) %>%
+  group_by(Location, month) %>%
+  mutate(AvgCumRad = mean(CumRad[!CurrentYear]))
+
+monthRadDev <- monthRad %>%
+  filter(Year==2015) %>%
+  mutate(PctDevCumRad = (mean(CumRad[Year==2015])-AvgCumRad)/AvgCumRad*100)
+
+monthRadDevTable <- dcast(monthRadDev, Location ~ month, value.var="PctDevCumRad")
+
+# Calculate quantiles
+Rad.bands <- filter(Radiation, !CurrentYear) %>%
+  group_by(Location, plotDate) %>%
+  summarise(lb=quantile(CumRad, .05),
+            ub=quantile(CumRad, .95))
+Rad.bands$Type <- "Historical\nAverage"
+
+
+# 2015 data
+AvgRadiation <- filter(Radiation, !Projected) %>%
+  group_by(Location, plotDate, CurrentYear) %>%
+  summarise(CumRad=median(CumRad)) %>%
+  mutate(Type=c("Historical\nAverage", "2015")[CurrentYear+1])
+
+# Projected
+ProjRadiation <- filter(Radiation, Projected)
+LastRecordedRad <- subset(Radiation, plotDate==(min(ProjRadiation$plotDate-days(1))) & CurrentYear)
+ProjRadiation <- rbind(LastRecordedRad, ProjRadiation) %>%
+  group_by(Location, plotDate, CurrentYear) %>%
+  summarise(CumRad=median(CumRad)) %>%
+  mutate(Type="Projected")
+
+AvgRadiation <- rbind(AvgRadiation, ProjRadiation)
+
+AvgRadiation$Type <- factor(AvgRadiation$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+Rad.bands$Type <- factor(Rad.bands$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+AvgRadiation$linetype <- c("1", "1", "11")[AvgRadiation$Type]
+
+ggplot() +
+  geom_ribbon(data=Rad.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="orange3") +
+  geom_line(data=AvgRadiation, aes(x=plotDate, y=CumRad, color=Type, linetype=Type, size=Type, group=Type)) +
+  facet_wrap(~Location, nrow=2) +
+  scale_color_manual("", values=c("orange4", "black", "black")) +
+  scale_linetype_manual("", values=c("solid", "solid", "11")) +
+  scale_size_manual("", values=c(1, 2, 2)) +
+  ggtitle("Radiation") +
+  ylab("Cumulative Radiation (MJ/m^2)") +
+  xlab("Date")
+
+# Non-cumulative Radiation ------------------------------------------------------
 Radiation <- climate %>%
   arrange(Date) %>%
   filter(AprOct) %>%
@@ -368,3 +446,92 @@ ggplot() +
 # kable(monthRadDevTable)
 #--------------------------------------------------------------------------------
 
+
+# Figure 3 ----------------------------------------------------------------------
+# Figure 3: Temperature from April 1st to October 31st
+# - Use the historical data to calculate median, 5 and 95% probabilities and shade
+# - Projected are always the last 14 rows from “min-ames-h”, “min-suth-h”
+# - Actual are the data in the e.g. “min-ames” minus the last 14 rows
+# - Calculate sums per month and % deviation from long term average. Tell R to output this in a table so we can copy and paste the information to the final destination.
+# - Make a nice legend  and axes titles with units
+# - Note the x-axis in the graph should always start from April 1st and end Oct 31st.
+# - Start the accumulation of rain from April 1st and skip the extra data that I have in the csv.
+
+# Temperature
+Temp <- climate %>%
+  arrange(Date) %>%
+  filter(AprOct) %>%
+  group_by(Location, Year, CurrentYear)
+
+# Month Averages
+monthTemp <- Temp %>%
+  mutate(month = month(Date, label=T)) %>%
+  group_by(Location, Year, month) %>%
+  summarise(MinTemp=mean(MinTemp), MaxTemp=mean(MaxTemp), CurrentYear=unique(CurrentYear)) %>%
+  group_by(Location, month) %>%
+  mutate(AvgMinTemp = mean(MinTemp[!CurrentYear]), AvgMaxTemp = mean(MaxTemp[!CurrentYear]))
+
+monthTempDev <- monthTemp %>%
+  filter(Year==2015) %>%
+  mutate(PctDevMinTemp = (mean(MinTemp[Year==2015])-AvgMinTemp)/AvgMinTemp*100,
+         PctDevMaxTemp = (mean(MaxTemp[Year==2015])-AvgMaxTemp)/AvgMaxTemp*100)
+
+monthMinTempDevTable <- dcast(monthTempDev, Location ~ month, value.var="PctDevMinTemp")
+monthMaxTempDevTable <- dcast(monthTempDev, Location ~ month, value.var="PctDevMaxTemp")
+
+# Calculate quantiles
+min.temp.bands <- filter(Temp, !CurrentYear) %>%
+  group_by(Location, plotDate) %>%
+  summarise(lb=quantile(MinTemp, .05),
+            ub=quantile(MinTemp, .95))
+min.temp.bands$Type <- "Historical\nAverage"
+
+max.temp.bands <- filter(Temp, !CurrentYear) %>%
+  group_by(Location, plotDate) %>%
+  summarise(lb=quantile(MaxTemp, .05),
+            ub=quantile(MaxTemp, .95))
+max.temp.bands$Type <- "Historical\nAverage"
+
+
+# 2015 data
+AvgTemp <- filter(Temp, !Projected) %>%
+  group_by(Location, plotDate, CurrentYear) %>%
+  summarise(MinTemp=median(MinTemp), MaxTemp=median(MaxTemp)) %>%
+  mutate(Type=c("Historical\nAverage", "2015")[CurrentYear+1])
+
+# Projected
+ProjTemp <- filter(Temp, Projected) %>%
+  group_by(Location, plotDate, CurrentYear) %>%
+  summarise(MinTemp=median(MinTemp), MaxTemp=median(MaxTemp)) %>%
+  mutate(Type="Projected")
+
+AvgTemp <- rbind(AvgTemp, ProjTemp)
+
+AvgTemp$Type <- factor(AvgTemp$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+min.temp.bands$Type <- factor(min.temp.bands$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+max.temp.bands$Type <- factor(max.temp.bands$Type, levels=c("Historical\nAverage", "2015", "Projected"))
+AvgTemp$linetype <- c("1", "1", "11")[AvgTemp$Type]
+
+ggplot() +
+  geom_ribbon(data=min.temp.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="mediumorchid3") +
+  geom_line(data=AvgTemp, aes(x=plotDate, y=MinTemp, color=Type, linetype=Type, size=Type, group=Type)) +
+  facet_wrap(~Location, nrow=2) +
+  scale_color_manual("", values=c("mediumorchid4", "black", "black")) +
+  scale_linetype_manual("", values=c("solid", "solid", "11")) +
+  scale_size_manual("", values=c(1, 2, 2)) +
+  ggtitle("Minimum Temperature") +
+  ylab("Degrees (F)") +
+  xlab("Date")
+
+
+ggplot() +
+  geom_ribbon(data=max.temp.bands, aes(x=plotDate, ymin=lb, ymax=ub), alpha=0.5, fill="firebrick1") +
+  geom_line(data=AvgTemp, aes(x=plotDate, y=MaxTemp, color=Type, linetype=Type, size=Type, group=Type)) +
+  facet_wrap(~Location, nrow=2) +
+  scale_color_manual("", values=c("firebrick4", "black", "black")) +
+  scale_linetype_manual("", values=c("solid", "solid", "11")) +
+  scale_size_manual("", values=c(1, 2, 2)) +
+  ggtitle("Maximum Temperature") +
+  ylab("Degrees (F)") +
+  xlab("Date")
+#--------------------------------------------------------------------------------
