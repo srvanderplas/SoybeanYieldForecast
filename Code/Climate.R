@@ -113,6 +113,11 @@ apply_subs <- function(x, pattern, replacement){
 
 # Function to fix climate variables ---------------------------------------------
 fixClimateVar <- function(climateData, var="temp", projected=NULL, locSubs = data_frame(from="suth", to="sutherland")){
+  # Debugging: variable definitions
+  # var="max"
+  # projected=NULL
+  # locSubs=data_frame(from="suth", to="sutherland")
+
   # Check var is one of "temp", "rad", "rain", "max", "min"
   if(!var%in%c("temp", "rad", "rain", "max", "min")){
     stop("Argument var must be one of \"temp\", \"rad\", \"rain\", \"max\", \"min\"")
@@ -143,7 +148,7 @@ fixClimateVar <- function(climateData, var="temp", projected=NULL, locSubs = dat
   # Strip -h from variable name
   histData$Location <- str_replace_all(histData$Location, "-h", "")
   # Remove NA values
-  histData <- filter(histData, !is.na(histData[,valueName]))
+  histData <- histData[!is.na(histData[,valueName]),]
 
 
   # get current information
@@ -156,7 +161,7 @@ fixClimateVar <- function(climateData, var="temp", projected=NULL, locSubs = dat
   # Indicate data is for the current year
   curData$CurrentYear <- TRUE
   # Remove NA values
-  curData <- filter(curData, !is.na(curData[,valueName]))
+  curData <- curData[!is.na(curData[,valueName]),]
 
   # If projected days aren't defined, define them based on last 14 days of current data
   if(is.null(projected)){
