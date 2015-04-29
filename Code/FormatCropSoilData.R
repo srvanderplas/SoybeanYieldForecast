@@ -39,7 +39,7 @@ cropData2015 <- convertUnits(cropData2015)
 cropData2015 <- melt(cropData2015, id.vars = c(1,2), variable.name="variable", value.name="value")
 cropData2015$variable <- str_replace(cropData2015$variable, "2015$", "")
 # Set type (for when data is merged back together)
-cropData2015$Type <- "2015 Production"
+cropData2015$Type <- "2015"
 # Set date
 cropData2015$plotDate <- ymd("2015-01-01") + days(cropData2015$day-1)
 cropData2015$Date <- ymd("2015-01-01") + days(cropData2015$day-1)
@@ -48,7 +48,7 @@ cropData2015$Year <- year(cropData2015$Date)
 endDataDate <- unique(cropData2015$plotDate[cropData2015$day==(max(cropData2015$day)-13)])
 cropData2015$projected <- cropData2015$plotDate>=endDataDate
 cropDataExtra <- filter(cropData2015, plotDate==endDataDate)
-cropData2015$Type[cropData2015$projected] <- "Forecasted 2015 Production"
+cropData2015$Type[cropData2015$projected] <- "Forecasted"
 cropDataExtra$projected <- FALSE
 cropData2015 <- bind_rows(cropData2015, cropDataExtra)
 cropData2015 <- cropData2015 %>%
@@ -107,8 +107,8 @@ measured.se$variable <- str_replace(measured.se$variable, "MStdError$", "")
 # Merge datasets together
 cropDataMeasured <- suppressWarnings(left_join(measured.days, measured.values) %>% left_join(measured.se) %>% filter(!is.na(day)))
 # Set type (for when data is merged back together)
-cropDataMeasured$Type <- "2015 Production"
-cropDataMeasured$PointType <- "2015 Production"
+cropDataMeasured$Type <- "2015"
+cropDataMeasured$PointType <- "2015"
 # Set date
 cropDataMeasured$plotDate <- ymd("2015-01-01") + days(cropDataMeasured$day-1)
 cropDataMeasured$Date <- ymd("2015-01-01") + days(cropDataMeasured$day-1)

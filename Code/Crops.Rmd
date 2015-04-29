@@ -8,11 +8,12 @@ output:
 ---
 
 
-# Code to plot crop data: yield, biomass, and lai
+# Code to plot crop data: 
+## Yield, Biomass, and Leaf Area Index
 ### in response to email from Sotirios on April 26, 2015
 ```{r setup, echo=F}
 library(knitr)
-opts_chunk$set(cache=T, autodep=T, warning=F, message=F, fig.retina=NA)
+opts_chunk$set(cache=T, autodep=T, warning=F, message=F, fig.retina=NA, echo=F)
 ```
 
 ```{r libraries, echo=F, cache=F}
@@ -47,7 +48,7 @@ source("../Code/UnitConversions.R")
 # -------------------------------------------------------------------------------
 ```
 
-```{r data-setup, echo=T}
+```{r data-setup}
 ## Data Setup
 # Read in crop/soil data --------------------------------------------------------
 setwd("../")
@@ -95,7 +96,6 @@ endSeason$FillType <- endSeason$Type
 # Set default ggplot2 theme
 theme_set(theme_bw())
 
-
 ggplot() +
   ylab("Biomass (lbs/acre)") +
   xlab(NULL) +
@@ -110,31 +110,32 @@ ggplot() +
   geom_line(aes(x=plotDate, y=median, color=Type, linetype=Type), size=1,
             data=filter(historicalBands, variable=="biomass")) +
   # 2015 Data and projection
-  geom_line(aes(x=plotDate, y=value, color=Type, linetype=Type), size=2,
+  geom_line(aes(x=plotDate, y=value, color=paste(Type, "Production"), linetype=paste(Type, "Production")), size=2,
             data=filter(cropData2015, variable=="biomass")) +
   # 2015 Measured Data
-  geom_point(aes(x=plotDate, y=value, color=Type, shape=PointType),
+  geom_point(aes(x=plotDate, y=value, color=paste(Type, "Production"), shape=PointType),
              data=filter(cropDataMeasured, variable=="biomass"), size=5) +
   # 2015 Measured SE
-  geom_errorbar(aes(x=plotDate, ymin=value-StdError, ymax=value+StdError, color=Type),
+  geom_errorbar(aes(x=plotDate, ymin=value-StdError, ymax=value+StdError,
+                    color=paste(Type, "Production")),
                 data=filter(cropDataMeasured, variable=="biomass")) +
   scale_shape_manual("Measured Data", values=1) +
   scale_linetype_manual(values=c(
     "2015 Production" = "solid",
     "Expected Value (to end of season)" = NA,
-    "Forecasted 2015 Production" = "11",
+    "Forecasted Production" = "11",
     "Historical climate data, 2015 management" = "solid")) +
   scale_fill_manual("90% Prediction Intervals", values=c(
     "2015 Production" = "transparent",
     "Expected Value (to end of season)" = "grey30",
-    "Forecasted 2015 Production" = "transparent",
+    "Forecasted Production" = "transparent",
     "Historical climate data, 2015 management" = "darkseagreen1")) +
   scale_color_manual(values=c(
     "2015 Production" = "black",
     "Expected Value (to end of season)" = NA,
-    "Forecasted 2015 Production" = "grey30",
+    "Forecasted Production" = "grey30",
     "Historical climate data, 2015 management" = "darkseagreen4")) +
-  guides(colour = guide_legend(override.aes = list(shape = NA))) + 
+  guides(colour = guide_legend(override.aes = list(shape = NA))) +
   theme(legend.position="bottom", legend.direction="vertical", legend.box="horizontal")
 
 ```
@@ -155,7 +156,6 @@ ggplot() +
 # Set default ggplot2 theme
 theme_set(theme_bw())
 
-
 ggplot() +
   ylab("Leaf Area Index (m^2 leaf / m^2 soil)") +
   xlab(NULL) +
@@ -170,32 +170,34 @@ ggplot() +
   geom_line(aes(x=plotDate, y=median, color=Type, linetype=Type), size=1,
             data=filter(historicalBands, variable=="lai")) +
   # 2015 Data and projection
-  geom_line(aes(x=plotDate, y=value, color=Type, linetype=Type), size=2,
+  geom_line(aes(x=plotDate, y=value, color=paste(Type, "Production"), linetype=paste(Type, "Production")), size=2,
             data=filter(cropData2015, variable=="lai")) +
   # 2015 Measured Data
-  geom_point(aes(x=plotDate, y=value, color=Type, shape=PointType),
+  geom_point(aes(x=plotDate, y=value, color=paste(Type, "Production"), shape=PointType),
              data=filter(cropDataMeasured, variable=="lai"), size=5) +
   # 2015 Measured SE
-  geom_errorbar(aes(x=plotDate, ymin=value-StdError, ymax=value+StdError, color=Type),
+  geom_errorbar(aes(x=plotDate, ymin=value-StdError, ymax=value+StdError,
+                    color=paste(Type, "Production")),
                 data=filter(cropDataMeasured, variable=="lai")) +
   scale_shape_manual("Measured Data", values=1) +
   scale_linetype_manual(values=c(
     "2015 Production" = "solid",
     "Expected Value (to end of season)" = NA,
-    "Forecasted 2015 Production" = "11",
+    "Forecasted Production" = "11",
     "Historical climate data, 2015 management" = "solid")) +
   scale_fill_manual("90% Prediction Intervals", values=c(
     "2015 Production" = "transparent",
     "Expected Value (to end of season)" = "grey30",
-    "Forecasted 2015 Production" = "transparent",
+    "Forecasted Production" = "transparent",
     "Historical climate data, 2015 management" = "darkseagreen1")) +
   scale_color_manual(values=c(
     "2015 Production" = "black",
     "Expected Value (to end of season)" = NA,
-    "Forecasted 2015 Production" = "grey30",
+    "Forecasted Production" = "grey30",
     "Historical climate data, 2015 management" = "darkseagreen4")) +
-  guides(colour = guide_legend(override.aes = list(shape = NA))) + 
+  guides(colour = guide_legend(override.aes = list(shape = NA))) +
   theme(legend.position="bottom", legend.direction="vertical", legend.box="horizontal")
+
 
 ```
 
@@ -213,7 +215,6 @@ ggplot() +
 # Set default ggplot2 theme
 theme_set(theme_bw())
 
-
 ggplot() +
   ylab("Yield") +
   xlab(NULL) +
@@ -228,31 +229,32 @@ ggplot() +
   geom_line(aes(x=plotDate, y=median, color=Type, linetype=Type), size=1,
             data=filter(historicalBands, variable=="yield")) +
   # 2015 Data and projection
-  geom_line(aes(x=plotDate, y=value, color=Type, linetype=Type), size=2,
+  geom_line(aes(x=plotDate, y=value, color=paste(Type, "Production"), linetype=paste(Type, "Production")), size=2,
             data=filter(cropData2015, variable=="yield")) +
 #   # 2015 Measured Data
-#   geom_point(aes(x=plotDate, y=value, color=Type, shape=PointType),
+#   geom_point(aes(x=plotDate, y=value, color=paste(Type, "Production"), shape=PointType),
 #              data=filter(cropDataMeasured, variable=="yield"), size=5) +
 #   # 2015 Measured SE
-#   geom_errorbar(aes(x=plotDate, ymin=value-StdError, ymax=value+StdError, color=Type),
+#   geom_errorbar(aes(x=plotDate, ymin=value-StdError, ymax=value+StdError,
+#                     color=paste(Type, "Production")),
 #                 data=filter(cropDataMeasured, variable=="yield")) +
   # scale_shape_manual("Measured Data", values=1) +
   scale_linetype_manual(values=c(
     "2015 Production" = "solid",
     "Expected Value (to end of season)" = NA,
-    "Forecasted 2015 Production" = "11",
+    "Forecasted Production" = "11",
     "Historical climate data, 2015 management" = "solid")) +
   scale_fill_manual("90% Prediction Intervals", values=c(
     "2015 Production" = "transparent",
     "Expected Value (to end of season)" = "grey30",
-    "Forecasted 2015 Production" = "transparent",
+    "Forecasted Production" = "transparent",
     "Historical climate data, 2015 management" = "lightgoldenrod1")) +
   scale_color_manual(values=c(
     "2015 Production" = "black",
     "Expected Value (to end of season)" = NA,
-    "Forecasted 2015 Production" = "grey30",
+    "Forecasted Production" = "grey30",
     "Historical climate data, 2015 management" = "lightgoldenrod4")) +
-  guides(colour = guide_legend(override.aes = list(shape = NA))) + 
+  guides(colour = guide_legend(override.aes = list(shape = NA))) +
   theme(legend.position="bottom", legend.direction="vertical", legend.box="horizontal")
 
 ```
