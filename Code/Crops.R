@@ -76,24 +76,35 @@ year(cropData$plotDate) <- 2015
 cropData2015 <- cropData[,c(1, 6, which(str_detect(names(cropData), "2015")))]
 # Remove rows with mainly NA values
 cropData2015 <- filter(cropData2015, rowSums(is.na(cropData2015))<6)
+# Convert Biomass
+cropData2015$biomass2015 <- KgHaToLbAcre(cropData2015$biomass2015)
 # Convert to long form and alter variable names
 cropData2015 <- melt(cropData2015, id.vars = c(1,2), variable.name="variable", value.name="value")
 cropData2015$variable <- str_replace(cropData2015$variable, "2015$", "")
 # Set type (for when data is merged back together)
-cropData2015$Type <- "2015"
+cropData2015$Type <- "2015 Production"
 # Set date
 cropData2015$plotDate <- ymd("2015-01-01") + days(cropData2015$day-1)
 cropData2015$Date <- ymd("2015-01-01") + days(cropData2015$day-1)
 cropData2015$Year <- year(cropData2015$Date)
 # Indicate projected data
-cropData2015$projected <- (1:nrow(cropData2015))<(nrow(cropData2015)-13)
-cropData2015 <- cropData2015 %>% group_by(Type, Year, variable) %>% filter(value>0)
+endDataDate <- unique(cropData2015$plotDate[cropData2015$day==(max(cropData2015$day)-13)])
+cropData2015$projected <- cropData2015$plotDate>=endDataDate
+cropDataExtra <- filter(cropData2015, plotDate==endDataDate)
+cropData2015$Type[cropData2015$projected] <- "Forecasted 2015 Production"
+cropDataExtra$projected <- FALSE
+cropData2015 <- bind_rows(cropData2015, cropDataExtra)
+cropData2015 <- cropData2015 %>%
+  group_by(Type, variable) %>%
+  filter(value>0) %>% arrange(variable, plotDate)
 
 
 # pull out historical data with 2015 management
 cropDataHistorical <- cropData[,c(1, 2, which(str_detect(names(cropData), "H$")))]
 # Remove rows with mainly NA values
 cropDataHistorical <- filter(cropDataHistorical, rowSums(is.na(cropDataHistorical))<6)
+# Convert Biomass
+cropDataHistorical$biomassH <- KgHaToLbAcre(cropDataHistorical$biomassH)
 # Convert to long form and alter variable names
 cropDataHistorical <- melt(cropDataHistorical, id.vars = c(1,2), variable.name="variable", value.name="value")
 cropDataHistorical$variable <- str_replace(cropDataHistorical$variable, "H$", "")
@@ -103,7 +114,10 @@ cropDataHistorical$Type <- "Historical climate data, 2015 management"
 cropDataHistorical$plotDate <- ymd("2015-01-01") + days(cropDataHistorical$day-1)
 cropDataHistorical$Date <- ymd("1980-01-01") + days(cropDataHistorical$Index)
 cropDataHistorical$Year <- year(cropDataHistorical$Date)
-cropDataHistorical <- cropDataHistorical %>% group_by(Type, Year, variable) %>% filter(value>0)
+cropDataHistorical <- cropDataHistorical %>%
+  group_by(Type, Year, variable) %>%
+  mutate(value.max = cummax(value)) %>%
+  filter(value.max>0)
 
 # Measured data
 var.types <- c("biomass", "lai", "NO3", "SW", "ST")
@@ -114,8 +128,12 @@ idx <- which(str_detect(names(cropData), "(biomass|lai|NO3|SW|ST)MStdError$"))
 measured.days <- cropData[,c(1, idx-2)]
 # corresponding value occurs 1 col before StdError
 measured.values <- cropData[,c(1, idx-1)]
+# Convert biomass
+measured.values$biomassM <- KgHaToLbAcre(measured.values$biomassM)
 # Standard error columns
 measured.se <- cropData[,c(1, idx)]
+# Convert biomass
+measured.se$biomassMStdError <- KgHaToLbAcre(measured.se$biomassMStdError)
 # label days with corresponding variables, then tranform to long form
 names(measured.days)[-1] <- str_sub(names(measured.values)[-1], 0, -2)
 measured.days <- melt(measured.days, id.vars = 1, variable.name="variable", value.name="day")
@@ -128,7 +146,8 @@ measured.se$variable <- str_replace(measured.se$variable, "MStdError$", "")
 
 cropDataMeasured <- left_join(measured.days, measured.values) %>% left_join(measured.se) %>% filter(!is.na(day))
 # Set type (for when data is merged back together)
-cropDataMeasured$Type <- "Measured 2015 Value"
+cropDataMeasured$Type <- "2015 Production"
+cropDataMeasured$PointType <- "2015 Production"
 # Set date
 cropDataMeasured$plotDate <- ymd("2015-01-01") + days(cropDataMeasured$day-1)
 cropDataMeasured$Date <- ymd("2015-01-01") + days(cropDataMeasured$day-1)
@@ -138,6 +157,8 @@ cropDataMeasured$Year <- year(cropDataMeasured$Date)
 cropDataEndSeason <- cropData[,c(1, 2, which(str_detect(names(cropData), "HF$")))]
 # Remove rows with mainly NA values
 cropDataEndSeason <- filter(cropDataEndSeason, rowSums(is.na(cropDataEndSeason))<6)
+# Convert Biomass
+cropDataEndSeason$biomassHF <- KgHaToLbAcre(cropDataEndSeason$biomassHF)
 # Convert to long form and alter variable names
 cropDataEndSeason <- melt(cropDataEndSeason, id.vars = c(1,2), variable.name="variable", value.name="value")
 cropDataEndSeason$variable <- str_replace(cropDataEndSeason$variable, "HF$", "")
@@ -147,10 +168,12 @@ cropDataEndSeason$Type <- "Expected Value (to end of season)"
 cropDataEndSeason$plotDate <- ymd("2015-01-01") + days(cropDataEndSeason$day-1)
 cropDataEndSeason$Date <- ymd("1980-01-01") + days(cropDataEndSeason$Index)
 cropDataEndSeason$Year <- year(cropDataEndSeason$Date)
-cropDataEndSeason <- cropDataEndSeason %>% group_by(Type, Year, variable) %>% filter(value>0)
+cropDataEndSeason <- cropDataEndSeason %>%
+  group_by(Type, Year, variable) %>%
+  mutate(value.max = cummax(value)) %>%
+  filter(value.max>0)
 
 # -------------------------------------------------------------------------------
-
 
 # Biomass (see example in the pptx).
 # X-axis = Date from April 20 to Oct 31, fixed.
@@ -164,5 +187,65 @@ cropDataEndSeason <- cropDataEndSeason %>% group_by(Type, Year, variable) %>% fi
 # 5. BiomassM, column U versus column T, to appear as points. In the legend call it measured biomass production.
 # 6. BiomassMStdError, column X versus T, to appear as +/- error bars in the points.
 
+historicalBands <- cropDataHistorical %>%
+  group_by(plotDate, variable, Type) %>%
+  summarise(lb = quantile(value.max, .05),
+            median = quantile(value.max, .50),
+            ub = quantile(value.max, .95)) %>%
+  filter(plotDate >= dmy("20-4-2015") & plotDate<=dmy("31-10-2015"))
+historicalBands$FillType <- historicalBands$Type
+
+
+endSeason <- cropDataEndSeason %>%
+  group_by(plotDate, variable, Type) %>%
+  summarise(LB = quantile(value.max, .05),
+            median = quantile(value.max, .50),
+            UB = quantile(value.max, .95)) %>%
+  filter(plotDate >= endDataDate & plotDate<=dmy("31-10-2015"))
+endSeason$FillType <- endSeason$Type
+
+# Set default ggplot2 theme
+theme_set(theme_bw())
+
+
 ggplot() +
-  geom_line(aes(x=plotDate, y=value, group=Year), data=filter(cropDataHistorical, variable=="biomass" & plotDate >= dmy("20-4-2015") & plotDate<=dmy("31-10-2015")))
+  # Historical Bands
+  geom_ribbon(aes(x=plotDate, ymin=lb, ymax=ub, fill=FillType),
+              data=filter(historicalBands, variable=="biomass")) +
+  # End of Season Bands
+  geom_ribbon(aes(x=plotDate, ymin=LB, ymax=UB, fill=FillType),
+              data=filter(endSeason, variable=="biomass"), alpha=.25) +
+  # Historical Median
+  geom_line(aes(x=plotDate, y=median, color=Type, linetype=Type), size=1,
+            data=filter(historicalBands, variable=="biomass")) +
+  # 2015 Data and projection
+  geom_line(aes(x=plotDate, y=value, color=Type, linetype=Type), size=2,
+            data=filter(cropData2015, variable=="biomass")) +
+  # 2015 Measured Data
+  geom_point(aes(x=plotDate, y=value, color=Type, shape=PointType),
+             data=filter(cropDataMeasured, variable=="biomass"), size=5) +
+  # 2015 Measured SE
+  geom_errorbar(aes(x=plotDate, ymin=value-StdError, ymax=value+StdError, color=Type),
+                data=filter(cropDataMeasured, variable=="biomass")) +
+  scale_shape_manual("Measured Data", values=1) +
+  scale_linetype_manual(values=c(
+    "2015 Production" = "solid",
+    "Expected Value (to end of season)" = NA,
+    "Forecasted 2015 Production" = "11",
+    "Historical climate data, 2015 management" = "solid")) +
+  scale_fill_manual("90% Prediction Intervals", values=c(
+    "2015 Production" = "transparent",
+    "Expected Value (to end of season)" = "grey30",
+    "Forecasted 2015 Production" = "transparent",
+    "Historical climate data, 2015 management" = "darkseagreen1")) +
+  scale_color_manual(values=c(
+    "2015 Production" = "black",
+    "Expected Value (to end of season)" = NA,
+    "Forecasted 2015 Production" = "grey30",
+    "Historical climate data, 2015 management" = "darkseagreen4")) +
+  guides(colour = guide_legend(override.aes = list(shape = NA))) +
+  ylab("Biomass (lbs/acre)") +
+  xlab(NULL)
+
+
+
