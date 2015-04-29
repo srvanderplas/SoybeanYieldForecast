@@ -56,7 +56,7 @@ KgHaToLbAcre <- function(x){ 0.89*x }
 # -------------------------------------------------------------------------------
 
 ## Data Setup
-# Read in climate data ----------------------------------------------------------
+# Read in crop/soil data --------------------------------------------------------
 # Read in header, split on comma, and remove spaces
 vars <- readLines("Data/Crop_Ames_Early.csv", n=1) %>%
   str_split(pattern = ",") %>%
