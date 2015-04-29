@@ -57,11 +57,6 @@ KgHaToLbAcre <- function(x){ 0.89*x }
 
 ## Data Setup
 # Read in crop/soil data --------------------------------------------------------
-# Read in header, split on comma, and remove spaces
-vars <- readLines("Data/Crop_Ames_Early.csv", n=1) %>%
-  str_split(pattern = ",") %>%
-  unlist() %>%
-  str_replace_all(" ", "")
 
 cropData <- read_csv("Data/Crop_Ames_Early2.csv")
 # Set year from date/Index
@@ -115,8 +110,7 @@ cropDataHistorical$plotDate <- ymd("2015-01-01") + days(cropDataHistorical$day-1
 cropDataHistorical$Date <- ymd("1980-01-01") + days(cropDataHistorical$Index)
 cropDataHistorical$Year <- year(cropDataHistorical$Date)
 cropDataHistorical <- cropDataHistorical %>%
-  group_by(Type, Year, variable) %>%
-  mutate(value.max = cummax(value))
+  group_by(Type, Year, variable)
 
 # Measured data
 var.types <- c("biomass", "lai", "NO3", "SW", "ST")
@@ -168,8 +162,7 @@ cropDataEndSeason$plotDate <- ymd("2015-01-01") + days(cropDataEndSeason$day-1)
 cropDataEndSeason$Date <- ymd("1980-01-01") + days(cropDataEndSeason$Index)
 cropDataEndSeason$Year <- year(cropDataEndSeason$Date)
 cropDataEndSeason <- cropDataEndSeason %>%
-  group_by(Type, Year, variable) %>%
-  mutate(value.max = cummax(value))
+  group_by(Type, Year, variable)
 
 # Calculate Bands ---------------------------------------------------------------
 
@@ -246,7 +239,8 @@ ggplot() +
     "Expected Value (to end of season)" = NA,
     "Forecasted 2015 Production" = "grey30",
     "Historical climate data, 2015 management" = "darkseagreen4")) +
-  guides(colour = guide_legend(override.aes = list(shape = NA)))
+  guides(colour = guide_legend(override.aes = list(shape = NA))) +
+  theme(legend.position="bottom")
 
 # -------------------------------------------------------------------------------
 
@@ -302,7 +296,8 @@ ggplot() +
     "Expected Value (to end of season)" = NA,
     "Forecasted 2015 Production" = "grey30",
     "Historical climate data, 2015 management" = "darkseagreen4")) +
-  guides(colour = guide_legend(override.aes = list(shape = NA)))
+  guides(colour = guide_legend(override.aes = list(shape = NA))) +
+  theme(legend.position="bottom")
 
 # -------------------------------------------------------------------------------
 
@@ -355,4 +350,5 @@ ggplot() +
     "Expected Value (to end of season)" = NA,
     "Forecasted 2015 Production" = "grey30",
     "Historical climate data, 2015 management" = "lightgoldenrod4")) +
-  guides(colour = guide_legend(override.aes = list(shape = NA)))
+  guides(colour = guide_legend(override.aes = list(shape = NA))) +
+  theme(legend.position="bottom")
