@@ -96,7 +96,7 @@ cropDataExtra$projected <- FALSE
 cropData2015 <- bind_rows(cropData2015, cropDataExtra)
 cropData2015 <- cropData2015 %>%
   group_by(Type, variable) %>%
-  filter(value>0) %>% arrange(variable, plotDate)
+  arrange(variable, plotDate)
 
 
 # pull out historical data with 2015 management
@@ -116,8 +116,7 @@ cropDataHistorical$Date <- ymd("1980-01-01") + days(cropDataHistorical$Index)
 cropDataHistorical$Year <- year(cropDataHistorical$Date)
 cropDataHistorical <- cropDataHistorical %>%
   group_by(Type, Year, variable) %>%
-  mutate(value.max = cummax(value)) %>%
-  filter(value.max>0)
+  mutate(value.max = cummax(value))
 
 # Measured data
 var.types <- c("biomass", "lai", "NO3", "SW", "ST")
@@ -170,8 +169,26 @@ cropDataEndSeason$Date <- ymd("1980-01-01") + days(cropDataEndSeason$Index)
 cropDataEndSeason$Year <- year(cropDataEndSeason$Date)
 cropDataEndSeason <- cropDataEndSeason %>%
   group_by(Type, Year, variable) %>%
-  mutate(value.max = cummax(value)) %>%
-  filter(value.max>0)
+  mutate(value.max = cummax(value))
+
+# Calculate Bands ---------------------------------------------------------------
+
+historicalBands <- cropDataHistorical %>%
+  group_by(plotDate, variable, Type) %>%
+  summarise(lb = quantile(value, .05),
+            median = quantile(value, .50),
+            ub = quantile(value, .95)) %>%
+  filter(plotDate >= dmy("20-4-2015") & plotDate<=dmy("31-10-2015"))
+historicalBands$FillType <- historicalBands$Type
+
+
+endSeason <- cropDataEndSeason %>%
+  group_by(plotDate, variable, Type) %>%
+  summarise(LB = quantile(value, .05),
+            median = quantile(value, .50),
+            UB = quantile(value, .95)) %>%
+  filter(plotDate >= endDataDate & plotDate<=dmy("31-10-2015"))
+endSeason$FillType <- endSeason$Type
 
 # -------------------------------------------------------------------------------
 
@@ -187,28 +204,14 @@ cropDataEndSeason <- cropDataEndSeason %>%
 # 5. BiomassM, column U versus column T, to appear as points. In the legend call it measured biomass production.
 # 6. BiomassMStdError, column X versus T, to appear as +/- error bars in the points.
 
-historicalBands <- cropDataHistorical %>%
-  group_by(plotDate, variable, Type) %>%
-  summarise(lb = quantile(value.max, .05),
-            median = quantile(value.max, .50),
-            ub = quantile(value.max, .95)) %>%
-  filter(plotDate >= dmy("20-4-2015") & plotDate<=dmy("31-10-2015"))
-historicalBands$FillType <- historicalBands$Type
-
-
-endSeason <- cropDataEndSeason %>%
-  group_by(plotDate, variable, Type) %>%
-  summarise(LB = quantile(value.max, .05),
-            median = quantile(value.max, .50),
-            UB = quantile(value.max, .95)) %>%
-  filter(plotDate >= endDataDate & plotDate<=dmy("31-10-2015"))
-endSeason$FillType <- endSeason$Type
-
 # Set default ggplot2 theme
 theme_set(theme_bw())
 
 
 ggplot() +
+  ylab("Biomass (lbs/acre)") +
+  xlab(NULL) +
+  xlim(mdy(c("04-20-2015", "10-31-2015"))) +
   # Historical Bands
   geom_ribbon(aes(x=plotDate, ymin=lb, ymax=ub, fill=FillType),
               data=filter(historicalBands, variable=="biomass")) +
@@ -243,9 +246,113 @@ ggplot() +
     "Expected Value (to end of season)" = NA,
     "Forecasted 2015 Production" = "grey30",
     "Historical climate data, 2015 management" = "darkseagreen4")) +
-  guides(colour = guide_legend(override.aes = list(shape = NA))) +
-  ylab("Biomass (lbs/acre)") +
-  xlab(NULL)
+  guides(colour = guide_legend(override.aes = list(shape = NA)))
+
+# -------------------------------------------------------------------------------
+
+# Leaf Area Index.
+# X-axis = Date from April 20 to Oct 31, fixed.
+# Y-axis = Leaf area index (m2 leaf/m2 soil)
+# Y-Variables to show in the figure
+# 1. laiH, column O versus column B, to appear as a shade and calculate also the long term average value and show it as a black line. In the legend call it LAI with 2015 management and historical weather data
+# 2. lai2015, column S versus column F, to appear as a thick solid line – leave out the last 14 rows! In the legend call it LAI 2015
+# 3. lai2015, column S versus column F, to appear as a thick solid line – plot only the last 14 rows! In the legend call it forecasted LAI for the next 14 days
+# 4. laiHF, column Q versus column B, to appear as a shade. In the legend call it expected LAI until the end of the season. This plot should start from the point when the lai2015 ends.
+# 5. laiM, column Z versus column T, to appear as points. In the legend call it measured LAI. # 6. laiMStdError, column AC versus T, to appear as +/- error bars in the points.
+
+# Set default ggplot2 theme
+theme_set(theme_bw())
 
 
+ggplot() +
+  ylab("Leaf Area Index (m^2 leaf / m^2 soil)") +
+  xlab(NULL) +
+  xlim(mdy(c("04-20-2015", "10-31-2015"))) +
+  # Historical Bands
+  geom_ribbon(aes(x=plotDate, ymin=lb, ymax=ub, fill=FillType),
+              data=filter(historicalBands, variable=="lai")) +
+  # End of Season Bands
+  geom_ribbon(aes(x=plotDate, ymin=LB, ymax=UB, fill=FillType),
+              data=filter(endSeason, variable=="lai"), alpha=.25) +
+  # Historical Median
+  geom_line(aes(x=plotDate, y=median, color=Type, linetype=Type), size=1,
+            data=filter(historicalBands, variable=="lai")) +
+  # 2015 Data and projection
+  geom_line(aes(x=plotDate, y=value, color=Type, linetype=Type), size=2,
+            data=filter(cropData2015, variable=="lai")) +
+  # 2015 Measured Data
+  geom_point(aes(x=plotDate, y=value, color=Type, shape=PointType),
+             data=filter(cropDataMeasured, variable=="lai"), size=5) +
+  # 2015 Measured SE
+  geom_errorbar(aes(x=plotDate, ymin=value-StdError, ymax=value+StdError, color=Type),
+                data=filter(cropDataMeasured, variable=="lai")) +
+  scale_shape_manual("Measured Data", values=1) +
+  scale_linetype_manual(values=c(
+    "2015 Production" = "solid",
+    "Expected Value (to end of season)" = NA,
+    "Forecasted 2015 Production" = "11",
+    "Historical climate data, 2015 management" = "solid")) +
+  scale_fill_manual("90% Prediction Intervals", values=c(
+    "2015 Production" = "transparent",
+    "Expected Value (to end of season)" = "grey30",
+    "Forecasted 2015 Production" = "transparent",
+    "Historical climate data, 2015 management" = "darkseagreen1")) +
+  scale_color_manual(values=c(
+    "2015 Production" = "black",
+    "Expected Value (to end of season)" = NA,
+    "Forecasted 2015 Production" = "grey30",
+    "Historical climate data, 2015 management" = "darkseagreen4")) +
+  guides(colour = guide_legend(override.aes = list(shape = NA)))
 
+# -------------------------------------------------------------------------------
+
+# Yield
+# Leave for now
+# X-axis = Date from April 20 to Oct 31, fixed.
+# Y-axis =
+# Y-Variables to show in the figure
+# 1.
+
+# Set default ggplot2 theme
+theme_set(theme_bw())
+
+
+ggplot() +
+  ylab("Yield") +
+  xlab(NULL) +
+  xlim(mdy(c("04-20-2015", "10-31-2015"))) +
+  # Historical Bands
+  geom_ribbon(aes(x=plotDate, ymin=lb, ymax=ub, fill=FillType),
+              data=filter(historicalBands, variable=="yield")) +
+  # End of Season Bands
+  geom_ribbon(aes(x=plotDate, ymin=LB, ymax=UB, fill=FillType),
+              data=filter(endSeason, variable=="yield"), alpha=.25) +
+  # Historical Median
+  geom_line(aes(x=plotDate, y=median, color=Type, linetype=Type), size=1,
+            data=filter(historicalBands, variable=="yield")) +
+  # 2015 Data and projection
+  geom_line(aes(x=plotDate, y=value, color=Type, linetype=Type), size=2,
+            data=filter(cropData2015, variable=="yield")) +
+#   # 2015 Measured Data
+#   geom_point(aes(x=plotDate, y=value, color=Type, shape=PointType),
+#              data=filter(cropDataMeasured, variable=="yield"), size=5) +
+#   # 2015 Measured SE
+#   geom_errorbar(aes(x=plotDate, ymin=value-StdError, ymax=value+StdError, color=Type),
+#                 data=filter(cropDataMeasured, variable=="yield")) +
+  # scale_shape_manual("Measured Data", values=1) +
+  scale_linetype_manual(values=c(
+    "2015 Production" = "solid",
+    "Expected Value (to end of season)" = NA,
+    "Forecasted 2015 Production" = "11",
+    "Historical climate data, 2015 management" = "solid")) +
+  scale_fill_manual("90% Prediction Intervals", values=c(
+    "2015 Production" = "transparent",
+    "Expected Value (to end of season)" = "grey30",
+    "Forecasted 2015 Production" = "transparent",
+    "Historical climate data, 2015 management" = "lightgoldenrod1")) +
+  scale_color_manual(values=c(
+    "2015 Production" = "black",
+    "Expected Value (to end of season)" = NA,
+    "Forecasted 2015 Production" = "grey30",
+    "Historical climate data, 2015 management" = "lightgoldenrod4")) +
+  guides(colour = guide_legend(override.aes = list(shape = NA)))
