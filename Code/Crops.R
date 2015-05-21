@@ -60,6 +60,7 @@ source("Code/FormatCropSoilData.R")
 
 # Calculate Bands ---------------------------------------------------------------
 
+cropDataHistorical<-na.omit(cropDataHistorical)
 historicalBands <- cropDataHistorical %>%
   group_by(plotDate, variable, Type) %>%
   summarise(lb = quantile(value, .05),
@@ -68,7 +69,7 @@ historicalBands <- cropDataHistorical %>%
   filter(plotDate >= dmy("20-4-2015") & plotDate<=dmy("31-10-2015"))
 historicalBands$FillType <- historicalBands$Type
 
-
+cropDataEndSeason<-na.omit(cropDataEndSeason)
 endSeason <- cropDataEndSeason %>%
   group_by(plotDate, variable, Type) %>%
   summarise(LB = quantile(value, .05),
@@ -95,7 +96,7 @@ endSeason$FillType <- endSeason$Type
 theme_set(theme_bw())
 
 
-ggplot() +
+p <- ggplot() +
   ylab("Biomass (lbs/acre)") +
   xlab(NULL) +
   xlim(mdy(c("04-20-2015", "10-31-2015"))) +
@@ -135,8 +136,16 @@ ggplot() +
     "Forecasted Production" = "grey30",
     "Historical climate data, 2015 management" = "darkseagreen4")) +
   guides(colour = guide_legend(override.aes = list(shape = NA))) +
+  facet_wrap(~crop)+
   theme(legend.position="bottom", legend.direction="vertical", legend.box="horizontal")
 
+plots<- cropData2015 %>%
+        group_by(location, planting, crop) %>%
+        do(plot = p %+% .)
+
+pdf(file="same plots.pdf", height = 8, width = 8)
+plots$plot
+dev.off()
 
 # -------------------------------------------------------------------------------
 

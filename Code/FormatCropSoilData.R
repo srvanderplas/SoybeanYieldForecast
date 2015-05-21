@@ -1,5 +1,13 @@
 ## Climate Data Setup
 
+library(ggplot2) # plotting
+library(lubridate) # handling date/time data
+library(stringr) # string manipulation
+library(dplyr) # summarising, organizing, and manipulating data subsets
+library(reshape2) # rearranging data
+library(readr) # reading data into R
+library(Hmisc) # capitalize function
+
 source("Code/UnitConversions.R")
 
 # Function to fix yield and biomass
@@ -16,7 +24,53 @@ cummaxValue <- function(df){
 
 
 # Read in crop and soil data ----------------------------------------------------
-cropData <- read_csv("Data/Crop_Ames_Early2.csv")
+CornAmesEarly<-read_csv("Data/Corn_Ames_Early.csv")
+CornAmesEarly$location<-"ames"
+CornAmesEarly$planting<-"early"
+CornAmesEarly$crop<-"corn"
+
+CornAmesLate<-read_csv("Data/Corn_Ames_Late.csv")
+CornAmesLate$location<-"ames"
+CornAmesLate$planting<-"late"
+CornAmesLate$crop<-"corn"
+
+CornSuthEarly<-read_csv("Data/Corn_Suth_Early.csv")
+CornSuthEarly$location<-"suth"
+CornSuthEarly$planting<-"early"
+CornSuthEarly$crop<-"corn"
+colnames(CornSuthEarly)<-colnames(CornAmesEarly)
+
+CornSuthLate<-read_csv("Data/Corn_Suth_Late.csv")
+CornSuthLate$location<-"suth"
+CornSuthLate$planting<-"late"
+CornSuthLate$crop<-"corn"
+colnames(CornSuthLate)<-colnames(CornAmesEarly)
+
+SoyAmesEarly<-read_csv("Data/Soy_Ames_Early.csv")
+SoyAmesEarly$location<-"ames"
+SoyAmesEarly$planting<-"early"
+SoyAmesEarly$crop<-"soy"
+
+SoyAmesLate<-read_csv("Data/Soy_Ames_Late.csv")
+SoyAmesLate$location<-"ames"
+SoyAmesLate$planting<-"late"
+SoyAmesLate$crop<-"soy"
+
+SoySuthEarly<-read_csv("Data/Soy_Suth_Early.csv")
+SoySuthEarly$location<-"suth"
+SoySuthEarly$planting<-"early"
+SoySuthEarly$crop<-"soy"
+colnames(SoySuthEarly)<-colnames(CornAmesEarly)
+
+SoySuthLate<-read_csv("Data/Soy_Suth_Late.csv")
+SoySuthLate$location<-"suth"
+SoySuthLate$planting<-"late"
+SoySuthLate$crop<-"soy"
+colnames(SoySuthLate)<-colnames(CornAmesEarly)
+
+cropData<-rbind(CornAmesEarly, CornAmesLate, CornSuthEarly, CornSuthLate, 
+                SoyAmesEarly, SoyAmesLate, SoySuthEarly, SoySuthLate)
+
 # remove spaces from the end of variable names
 names(cropData) <- names(cropData) %>%
   str_replace("[ \\s]$", "")
@@ -30,13 +84,13 @@ year(cropData$plotDate) <- 2015
 
 # 2015 Data ---------------------------------------------------------------------
 # pull out 2015 data
-cropData2015 <- cropData[,c(1, 6, which(str_detect(names(cropData), "2015")))]
+cropData2015 <- cropData[,c(1, 6,58, 59, 60, which(str_detect(names(cropData), "2015")))]
 # Remove rows with mainly NA values
-cropData2015 <- filter(cropData2015, rowSums(is.na(cropData2015))<6)
+cropData2015 <- filter(cropData2015, rowSums(is.na(cropData2015))<4)
 # Convert Units
 cropData2015 <- convertUnits(cropData2015)
 # Convert to long form and alter variable names
-cropData2015 <- melt(cropData2015, id.vars = c(1,2), variable.name="variable", value.name="value")
+cropData2015 <- melt(cropData2015, id.vars = c(1,2, 3, 4, 5), variable.name="variable", value.name="value")
 cropData2015$variable <- str_replace(cropData2015$variable, "2015$", "")
 # Set type (for when data is merged back together)
 cropData2015$Type <- "2015"
@@ -60,13 +114,13 @@ rm(cropDataExtra)
 
 # Historical Data (2015 Management) ---------------------------------------------
 # pull out historical data with 2015 management
-cropDataHistorical <- cropData[,c(1, 2, which(str_detect(names(cropData), "H$")))]
+cropDataHistorical <- cropData[,c(1, 2, 58, 59, 60, which(str_detect(names(cropData), "H$")))]
 # Remove rows with mainly NA values
-cropDataHistorical <- filter(cropDataHistorical, rowSums(is.na(cropDataHistorical))<6)
+cropDataHistorical <- filter(cropDataHistorical, rowSums(is.na(cropDataHistorical))<4)
 # Convert Units
 cropDataHistorical <- convertUnits(cropDataHistorical)
 # Convert to long form and alter variable names
-cropDataHistorical <- melt(cropDataHistorical, id.vars = c(1,2), variable.name="variable", value.name="value")
+cropDataHistorical <- melt(cropDataHistorical, id.vars = c(1,2, 3, 4, 5), variable.name="variable", value.name="value")
 cropDataHistorical$variable <- str_replace(cropDataHistorical$variable, "H$", "")
 # Set type (for when data is merged back together)
 cropDataHistorical$Type <- "Historical climate data, 2015 management"
@@ -96,12 +150,12 @@ measured.values <- convertUnits(measured.values)
 measured.se <- convertUnits(measured.se)
 # label days with corresponding variables, then tranform to long form
 names(measured.days)[-1] <- str_sub(names(measured.values)[-1], 0, -2)
-measured.days <- melt(measured.days, id.vars = 1, variable.name="variable", value.name="day")
+measured.days <- melt(measured.days, id.vars = c(1,3,4,5), variable.name="variable", value.name="day")
 # transform to long form and then remove "M" from variable names
-measured.values <- melt(measured.values, id.vars = 1, variable.name = "variable", value.name = "value")
+measured.values <- melt(measured.values, id.vars = c(1,3,4,5), variable.name = "variable", value.name = "value")
 measured.values$variable <- str_replace(measured.values$variable, "M$", "")
 # transform to long form and then remove "MStdError" from variable names
-measured.se <- melt(measured.se, id.vars = 1, variable.name = "variable", value.name = "StdError")
+measured.se <- melt(measured.se, id.vars = c(1, 3, 4, 5), variable.name = "variable", value.name = "StdError")
 measured.se$variable <- str_replace(measured.se$variable, "MStdError$", "")
 
 # Merge datasets together
@@ -110,6 +164,7 @@ cropDataMeasured <- suppressWarnings(left_join(measured.days, measured.values) %
 cropDataMeasured$Type <- "2015"
 cropDataMeasured$PointType <- "2015"
 # Set date
+cropDataMeasured$day<-as.integer(cropDataMeasured$day)
 cropDataMeasured$plotDate <- ymd("2015-01-01") + days(cropDataMeasured$day-1)
 cropDataMeasured$Date <- ymd("2015-01-01") + days(cropDataMeasured$day-1)
 cropDataMeasured$Year <- year(cropDataMeasured$Date)
@@ -117,13 +172,13 @@ rm(measured.values, measured.se, measured.days, var.types, idx)
 # End Processing Measured Data --------------------------------------------------
 
 # Expected End of Season values -------------------------------------------------
-cropDataEndSeason <- cropData[,c(1, 2, which(str_detect(names(cropData), "HF$")))]
+cropDataEndSeason <- cropData[,c(1, 2, 58, 59, 60, which(str_detect(names(cropData), "HF$")))]
 # Remove rows with mainly NA values
-cropDataEndSeason <- filter(cropDataEndSeason, rowSums(is.na(cropDataEndSeason))<6)
+cropDataEndSeason <- filter(cropDataEndSeason, rowSums(is.na(cropDataEndSeason))<4)
 # Convert Units
 cropDataEndSeason <- convertUnits(cropDataEndSeason)
 # Convert to long form and alter variable names
-cropDataEndSeason <- melt(cropDataEndSeason, id.vars = c(1,2), variable.name="variable", value.name="value")
+cropDataEndSeason <- melt(cropDataEndSeason, id.vars = c(1,2, 3, 4,5), variable.name="variable", value.name="value")
 cropDataEndSeason$variable <- str_replace(cropDataEndSeason$variable, "HF$", "")
 # Set type (for when data is merged back together)
 cropDataEndSeason$Type <- "Expected Value (to end of season)"
